@@ -1,0 +1,367 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bodega Full App</title>
+
+<link rel="manifest" href="manifest.json">
+
+<style>
+body{
+font-family:Arial;
+background:#f3f4f6;
+margin:0;
+}
+
+header{
+background:#111827;
+color:white;
+padding:15px;
+text-align:center;
+}
+
+main{
+padding:15px;
+max-width:1100px;
+margin:auto;
+}
+
+.card{
+background:white;
+padding:15px;
+border-radius:12px;
+margin-bottom:15px;
+box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
+
+input,button{
+width:100%;
+padding:10px;
+margin-top:8px;
+border-radius:8px;
+border:1px solid #ccc;
+}
+
+button{
+background:#2563eb;
+color:white;
+font-weight:bold;
+border:none;
+cursor:pointer;
+}
+
+.stats{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+gap:10px;
+}
+
+.stat{
+background:#e5e7eb;
+padding:15px;
+border-radius:10px;
+text-align:center;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+}
+
+th,td{
+padding:8px;
+border-bottom:1px solid #ddd;
+text-align:left;
+}
+
+.low-stock{
+color:red;
+font-weight:bold;
+}
+
+video{
+width:100%;
+border-radius:10px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>Bodega Full App</h1>
+<p>POS + Scanner + Stock + Ganancias</p>
+</header>
+
+<main>
+
+<div class="stats">
+
+<div class="stat">
+<h2 id="productsCount">0</h2>
+<p>Productos</p>
+</div>
+
+<div class="stat">
+<h2 id="salesCount">0</h2>
+<p>Ventas</p>
+</div>
+
+<div class="stat">
+<h2 id="profitTotal">S/0</h2>
+<p>Ganancia</p>
+</div>
+
+</div>
+
+<div class="card">
+<h2>Agregar Producto</h2>
+
+<input id="barcode" placeholder="Código de barras">
+<input id="name" placeholder="Nombre del producto">
+<input id="buyPrice" type="number" placeholder="Precio compra">
+<input id="sellPrice" type="number" placeholder="Precio venta">
+<input id="stock" type="number" placeholder="Stock">
+
+<button onclick="addProduct()">Guardar Producto</button>
+</div>
+
+<div class="card">
+<h2>Escáner</h2>
+
+<video id="preview"></video>
+
+<button onclick="startScanner()">Abrir Cámara</button>
+
+</div>
+
+<div class="card">
+<h2>Registrar Venta</h2>
+
+<input id="saleBarcode" placeholder="Código">
+
+<input id="quantity" type="number" value="1">
+
+<button onclick="sellProduct()">Registrar Venta</button>
+
+<h3 id="saleMessage"></h3>
+</div>
+
+<div class="card">
+<h2>Inventario</h2>
+
+<table>
+
+<thead>
+<tr>
+<th>Código</th>
+<th>Producto</th>
+<th>Stock</th>
+<th>Compra</th>
+<th>Venta</th>
+</tr>
+</thead>
+
+<tbody id="inventory"></tbody>
+
+</table>
+</div>
+
+<div class="card">
+<h2>Historial</h2>
+
+<table>
+
+<thead>
+<tr>
+<th>Producto</th>
+<th>Cantidad</th>
+<th>Total</th>
+<th>Ganancia</th>
+</tr>
+</thead>
+
+<tbody id="salesHistory"></tbody>
+
+</table>
+
+</div>
+
+</main>
+
+<script src="https://unpkg.com/@zxing/library@latest"></script>
+
+<script>
+
+let products = JSON.parse(localStorage.getItem("products")) || [];
+let sales = JSON.parse(localStorage.getItem("sales")) || [];
+
+function saveData(){
+localStorage.setItem("products", JSON.stringify(products));
+localStorage.setItem("sales", JSON.stringify(sales));
+}
+
+function updateDashboard(){
+
+document.getElementById("productsCount").innerText = products.length;
+
+document.getElementById("salesCount").innerText = sales.length;
+
+let totalProfit = sales.reduce((a,b)=>a+b.profit,0);
+
+document.getElementById("profitTotal").innerText =
+"S/" + totalProfit.toFixed(2);
+
+renderInventory();
+renderSales();
+
+}
+
+function renderInventory(){
+
+const tbody = document.getElementById("inventory");
+
+tbody.innerHTML = "";
+
+products.forEach(p=>{
+
+tbody.innerHTML += `
+<tr>
+<td>${p.barcode}</td>
+<td>${p.name}</td>
+<td class="${p.stock <= 3 ? 'low-stock' : ''}">${p.stock}</td>
+<td>S/${p.buyPrice}</td>
+<td>S/${p.sellPrice}</td>
+</tr>
+`;
+
+});
+
+}
+
+function renderSales(){
+
+const tbody = document.getElementById("salesHistory");
+
+tbody.innerHTML = "";
+
+sales.forEach(s=>{
+
+tbody.innerHTML += `
+<tr>
+<td>${s.name}</td>
+<td>${s.quantity}</td>
+<td>S/${s.total}</td>
+<td>S/${s.profit}</td>
+</tr>
+`;
+
+});
+
+}
+
+function addProduct(){
+
+const barcode = document.getElementById("barcode").value;
+const name = document.getElementById("name").value;
+const buyPrice = parseFloat(document.getElementById("buyPrice").value);
+const sellPrice = parseFloat(document.getElementById("sellPrice").value);
+const stock = parseInt(document.getElementById("stock").value);
+
+if(!barcode || !name){
+alert("Completa los datos");
+return;
+}
+
+products.push({
+barcode,
+name,
+buyPrice,
+sellPrice,
+stock
+});
+
+saveData();
+updateDashboard();
+
+alert("Producto guardado");
+
+}
+
+function sellProduct(){
+
+const code = document.getElementById("saleBarcode").value;
+
+const quantity = parseInt(document.getElementById("quantity").value);
+
+const product = products.find(p=>p.barcode===code);
+
+if(!product){
+document.getElementById("saleMessage").innerText =
+"Producto no encontrado";
+return;
+}
+
+if(product.stock < quantity){
+
+document.getElementById("saleMessage").innerText =
+"Stock insuficiente";
+
+return;
+}
+
+product.stock -= quantity;
+
+const total = quantity * product.sellPrice;
+
+const profit = quantity * (product.sellPrice - product.buyPrice);
+
+sales.unshift({
+name: product.name,
+quantity,
+total,
+profit
+});
+
+saveData();
+updateDashboard();
+
+document.getElementById("saleMessage").innerText =
+`Venta registrada: ${product.name} - S/${total}`;
+
+}
+
+async function startScanner(){
+
+const codeReader = new ZXing.BrowserBarcodeReader();
+
+const videoInputDevices = await codeReader.listVideoInputDevices();
+
+const firstDeviceId = videoInputDevices[0].deviceId;
+
+codeReader.decodeFromVideoDevice(firstDeviceId, 'preview', (result, err) => {
+
+if(result){
+
+document.getElementById("barcode").value = result.text;
+
+document.getElementById("saleBarcode").value = result.text;
+
+}
+
+});
+
+}
+
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.register('service-worker.js');
+}
+
+updateDashboard();
+
+</script>
+
+</body>
+</html>
